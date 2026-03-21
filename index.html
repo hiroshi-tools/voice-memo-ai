@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>音声メモ AI チャット</title>
+<style>
+/* ============================================================
+   ベース
+   ============================================================ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#1a1a2e;--ink2:#4a4a6a;--ink3:#8888a8;
+  --bg:#f0f0f5;--card:#fff;
+  --bubble-user:#3a6df0;--bubble-ai:#e8e8f0;
+  --accent:#3a6df0;--accent2:#6c5ce7;
+  --success:#27ae60;--danger:#e74c3c;--warn:#f39c12;
+  --radius:16px;--radius-sm:10px;
+  --font:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:15px;
+  display:flex;flex-direction:column;-webkit-text-size-adjust:100%}
+
+/* ============================================================
+   ヘッダー
+   ============================================================ */
+.header{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#fff;padding:12px 16px;display:flex;align-items:center;
+  justify-content:space-between;flex-shrink:0;
+  box-shadow:0 2px 16px rgba(58,109,240,.25);z-index:50;
+}
+.header h1{font-size:17px;font-weight:700;display:flex;align-items:center;gap:6px}
+.header-right{display:flex;gap:6px}
+.hdr-btn{
+  background:rgba(255,255,255,.18);border:none;color:#fff;
+  width:40px;height:40px;border-radius:50%;font-size:18px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  -webkit-tap-highlight-color:transparent;transition:background .2s;
+}
+.hdr-btn:active{background:rgba(255,255,255,.35)}
+
+/* ============================================================
+   モードバー
+   ============================================================ */
+.mode-bar{
+  display:flex;gap:6px;padding:10px 12px;background:#fff;
+  border-bottom:1px solid #e4e4ee;flex-shrink:0;overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.mode-chip{
+  flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:13px;font-weight:600;
+  border:2px solid #e4e4ee;background:#fff;color:var(--ink2);cursor:pointer;
+  transition:all .2s;-webkit-tap-highlight-color:transparent;white-space:nowrap;
+}
+.mode-chip.active{border-color:var(--accent);background:rgba(58,109,240,.06);color:var(--accent)}
+
+/* LLM切替 */
+.llm-bar{
+  display:flex;gap:4px;padding:6px 12px;background:#fafaff;
+  border-bottom:1px solid #e4e4ee;flex-shrink:0;align-items:center;
+  font-size:12px;color:var(--ink3);
+}
+.llm-bar span.label{margin-right:4px;font-weight:600}
+.llm-chip{
+  padding:4px 10px;border-radius:14px;font-size:11px;font-weight:600;
+  border:1.5px solid #e4e4ee;background:#fff;color:var(--ink3);cursor:pointer;
+  transition:all .2s;-webkit-tap-highlight-color:transparent;
+}
+.llm-chip.active{border-color:var(--accent);background:rgba(58,109,240,.06);color:var(--accent)}
+.llm-chip.disabled{opacity:.35;cursor:not-allowed}
+
+/* ============================================================
+   チャットエリア
+   ============================================================ */
+.chat-area{
+  flex:1;overflow-y:auto;padding:16px 12px 8px;
+  display:flex;flex-direction:column;gap:12px;
+  -webkit-overflow-scrolling:touch;
+}
+
+.msg{display:flex;gap:8px;max-width:88%;animation:fadeUp .25s ease}
+.msg.user{align-self:flex-end;flex-direction:row-reverse}
+.msg.ai{align-self:flex-start}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.msg-avatar{
+  width:32px;height:32px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+}
+.msg.ai .msg-avatar{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.msg.user .msg-avatar{background:#ddd}
+
+.msg-bubble{
+  padding:12px 16px;border-radius:var(--radius);line-height:1.7;
+  font-size:14px;white-space:pre-wrap;word-break:break-word;
+}
+.msg.user .msg-bubble{background:var(--bubble-user);color:#fff;border-bottom-right-radius:4px}
+.msg.ai .msg-bubble{background:var(--bubble-ai);color:var(--ink);border-bottom-left-radius:4px}
+.msg.ai .msg-bubble .heading{font-weight:700;color:var(--accent)}
+
+.typing{display:flex;gap:4px;padding:8px 16px}
+.typing span{width:8px;height:8px;border-radius:50%;background:var(--ink3);animation:bounce .6s infinite alternate}
+.typing span:nth-child(2){animation-delay:.15s}
+.typing span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{to{transform:translateY(-6px);opacity:.4}}
+
+.sys-msg{text-align:center;font-size:12px;color:var(--ink3);padding:4px 0}
+
+/* ============================================================
+   保存パネル（インライン）
+   ============================================================ */
+.save-panel{
+  background:#fff;border:2px solid #e4e4ee;border-radius:var(--radius);
+  padding:14px;margin:4px 0;animation:fadeUp .25s ease;
+}
+.save-panel-title{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:10px}
+.save-tabs{display:flex;gap:0;border-radius:var(--radius-sm);overflow:hidden;border:2px solid #e4e4ee;margin-bottom:12px}
+.save-tab{
+  flex:1;padding:10px;text-align:center;font-size:13px;font-weight:600;
+  cursor:pointer;background:#fff;border:none;transition:all .2s;-webkit-tap-highlight-color:transparent;
+}
+.save-tab.active{background:var(--accent);color:#fff}
+.save-tab:disabled{opacity:.4;cursor:not-allowed}
+.save-section{display:none}.save-section.active{display:block}
+
+.save-input{
+  width:100%;padding:10px 12px;border:2px solid #e4e4ee;border-radius:var(--radius-sm);
+  font-size:14px;font-family:var(--font);margin-bottom:8px;
+}
+.save-input:focus{outline:none;border-color:var(--accent)}
+
+.doc-list{max-height:180px;overflow-y:auto;border:1px solid #e4e4ee;border-radius:var(--radius-sm)}
+.doc-item{
+  padding:10px 12px;border-bottom:1px solid #f0f0f5;cursor:pointer;
+  display:flex;align-items:center;gap:8px;font-size:13px;
+  transition:background .15s;-webkit-tap-highlight-color:transparent;
+}
+.doc-item:last-child{border-bottom:none}
+.doc-item:active,.doc-item.selected{background:rgba(58,109,240,.06)}
+.doc-item .check{margin-left:auto;color:var(--accent);font-weight:700;min-width:18px;text-align:center}
+
+.save-actions{display:flex;gap:8px;margin-top:10px}
+.save-btn{
+  flex:1;padding:12px;border:none;border-radius:var(--radius-sm);
+  font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;-webkit-tap-highlight-color:transparent;
+}
+.save-btn.primary{background:var(--success);color:#fff}
+.save-btn.chat-send{background:var(--accent);color:#fff}
+.save-btn.outline{background:#fff;color:var(--ink2);border:2px solid #e4e4ee}
+.save-btn:disabled{opacity:.4;cursor:not-allowed}
+.save-hint{font-size:11px;color:var(--ink3);margin-top:4px}
+
+/* ============================================================
+   入力エリア
+   ============================================================ */
+.input-area{
+  flex-shrink:0;background:#fff;border-top:1px solid #e4e4ee;
+  padding:10px 12px;padding-bottom:max(10px, env(safe-area-inset-bottom));
+  display:flex;align-items:flex-end;gap:8px;
+}
+.input-wrap{
+  flex:1;display:flex;align-items:flex-end;
+  background:#f5f5fa;border-radius:22px;padding:4px 4px 4px 16px;
+  border:2px solid transparent;transition:border-color .2s;
+}
+.input-wrap:focus-within{border-color:var(--accent)}
+.input-wrap textarea{
+  flex:1;border:none;background:transparent;font-size:15px;
+  font-family:var(--font);resize:none;line-height:1.5;
+  max-height:100px;padding:6px 0;color:var(--ink);
+}
+.input-wrap textarea:focus{outline:none}
+.input-wrap textarea::placeholder{color:var(--ink3)}
+
+.mic-btn{
+  width:40px;height:40px;border-radius:50%;border:none;
+  background:transparent;font-size:22px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;-webkit-tap-highlight-color:transparent;transition:all .2s;
+}
+.mic-btn.recording{background:var(--danger);color:#fff;animation:micPulse 1.2s infinite}
+@keyframes micPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(231,76,60,.3)}
+  50%{box-shadow:0 0 0 10px rgba(231,76,60,0)}
+}
+.send-btn{
+  width:40px;height:40px;border-radius:50%;border:none;
+  background:var(--accent);color:#fff;font-size:18px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;-webkit-tap-highlight-color:transparent;transition:all .15s;
+}
+.send-btn:disabled{background:#ccc;cursor:not-allowed}
+.send-btn:active:not(:disabled){transform:scale(.92)}
+
+/* ============================================================
+   設定モーダル
+   ============================================================ */
+.modal-overlay{
+  display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:100;
+  background:rgba(0,0,0,.4);
+}
+.modal-overlay.show{display:flex;justify-content:center;align-items:flex-start;padding-top:50px}
+.modal-card{
+  background:#fff;border-radius:var(--radius);padding:24px 20px;
+  width:92%;max-width:420px;max-height:80vh;overflow-y:auto;
+  box-shadow:0 8px 40px rgba(0,0,0,.15);animation:fadeUp .25s ease;
+}
+.modal-card h2{font-size:18px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--ink2);margin-bottom:4px}
+.field input{
+  width:100%;padding:10px 12px;border:2px solid #e4e4ee;border-radius:var(--radius-sm);font-size:14px;font-family:var(--font);
+}
+.field input:focus{outline:none;border-color:var(--accent)}
+.field .hint{font-size:11px;color:var(--ink3);margin-top:3px}
+.modal-actions{display:flex;gap:8px;margin-top:20px}
+.modal-actions button{
+  flex:1;padding:12px;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:600;cursor:pointer;
+}
+.btn-save{background:var(--accent);color:#fff}
+.btn-cancel{background:#f0f0f5;color:var(--ink2)}
+
+/* トースト */
+.toast{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(80px);
+  padding:10px 22px;border-radius:8px;font-size:13px;font-weight:600;
+  z-index:200;transition:transform .3s ease;color:#fff;max-width:85%;text-align:center;
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.success{background:var(--success)}.toast.error{background:var(--danger)}.toast.info{background:var(--ink2)}
+
+/* Welcome */
+.welcome{text-align:center;padding:40px 20px;color:var(--ink3)}
+.welcome .icon{font-size:48px;margin-bottom:12px}
+.welcome .title{font-size:16px;font-weight:600;color:var(--ink2);margin-bottom:6px}
+.welcome .sub{font-size:13px;line-height:1.6}
+</style>
+</head>
+<body>
+
+<!-- ========== ヘッダー ========== -->
+<div class="header">
+  <h1>🎤 音声メモ AI</h1>
+  <div class="header-right">
+    <button class="hdr-btn" onclick="resetChat()" title="新しい会話">🔄</button>
+    <button class="hdr-btn" onclick="openSettings()" title="設定">⚙️</button>
+  </div>
+</div>
+
+<!-- ========== モード選択 ========== -->
+<div class="mode-bar">
+  <span class="mode-chip active" data-mode="lesson" onclick="selectMode(this)">📖 授業振り返り</span>
+  <span class="mode-chip" data-mode="idea" onclick="selectMode(this)">💡 アイデア</span>
+  <span class="mode-chip" data-mode="meeting" onclick="selectMode(this)">🤝 会議メモ</span>
+  <span class="mode-chip" data-mode="work" onclick="selectMode(this)">📋 業務内容</span>
+</div>
+
+<!-- ========== LLM切替 ========== -->
+<div class="llm-bar">
+  <span class="label">AI:</span>
+  <span class="llm-chip active" data-llm="gemini" onclick="selectLlm(this)">Gemini</span>
+  <span class="llm-chip" data-llm="claude" onclick="selectLlm(this)">Claude</span>
+  <span class="llm-chip" data-llm="openai" onclick="selectLlm(this)">OpenAI</span>
+</div>
+
+<!-- ========== チャット ========== -->
+<div class="chat-area" id="chatArea">
+  <div class="welcome" id="welcome">
+    <div class="icon">🎙️</div>
+    <div class="title">音声メモ AI チャット</div>
+    <div class="sub">🎤マイクボタンで話すか、テキストを入力してください。<br>AIが内容を整理→確認→保存まで対話でサポートします。</div>
+  </div>
+</div>
+
+<!-- ========== 入力 ========== -->
+<div class="input-area">
+  <div class="input-wrap">
+    <textarea id="userInput" rows="1" placeholder="話した内容を入力、またはマイクで音声入力..." oninput="autoGrow(this);updateSendBtn()"></textarea>
+  </div>
+  <button class="mic-btn" id="micBtn" onclick="toggleMic()">🎤</button>
+  <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>➤</button>
+</div>
+
+<!-- ========== 設定モーダル ========== -->
+<div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettings()">
+  <div class="modal-card">
+    <h2>⚙️ 接続設定</h2>
+    <div class="field">
+      <label>GAS API URL（必須）</label>
+      <input type="text" id="sApiUrl" placeholder="https://script.google.com/macros/s/.../exec">
+      <div class="hint">GASをデプロイして取得したWebアプリURL</div>
+    </div>
+    <div class="field">
+      <label>API認証トークン</label>
+      <input type="text" id="sApiToken" placeholder="GAS設定画面で設定したトークン">
+      <div class="hint">GAS側と同じ値を入力（未設定なら空欄でOK）</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeSettings()">キャンセル</button>
+      <button class="btn-save" onclick="doSaveLocalSettings()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== トースト ========== -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+//  設定 (localStorage)
+// ============================================================
+const LS_KEY = 'voiceMemoAI_settings';
+function getLocalSettings() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch(e) { return {}; }
+}
+function setLocalSettings(s) { localStorage.setItem(LS_KEY, JSON.stringify(s)); }
+
+// ============================================================
+//  状態
+// ============================================================
+const S = {
+  mode: 'lesson',
+  llm: 'gemini',
+  messages: [],
+  rawTexts: [],
+  lastAiContent: '',
+  isProcessing: false,
+  recognition: null,
+  isRecording: false,
+  serverSettings: {},
+  selectedDocId: null,
+  selectedFolderId: null,
+  savePanelShown: false,
+  searchTimer: null
+};
+
+// ============================================================
+//  GAS API 呼び出し
+// ============================================================
+async function callAPI(body) {
+  const ls = getLocalSettings();
+  if (!ls.apiUrl) throw new Error('GAS API URLが未設定です。⚙️設定から登録してください。');
+  if (ls.apiToken) body.token = ls.apiToken;
+
+  const res = await fetch(ls.apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  });
+
+  // GASはContent-Type: text/plain でPOSTするとCORS問題を回避できる
+  const text = await res.text();
+  let data;
+  try { data = JSON.parse(text); } catch(e) { throw new Error('サーバー応答の解析に失敗: ' + text.substring(0, 200)); }
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+// ============================================================
+//  初期化
+// ============================================================
+window.addEventListener('DOMContentLoaded', async () => {
+  const ls = getLocalSettings();
+  if (ls.apiUrl) {
+    try {
+      S.serverSettings = await callAPI({ action: 'getSettings' });
+      S.llm = S.serverSettings.defaultLlm || 'gemini';
+      updateLlmUI();
+    } catch(e) {
+      console.warn('サーバー接続失敗:', e.message);
+    }
+  }
+});
+
+// ============================================================
+//  モード & LLM
+// ============================================================
+function selectMode(el) {
+  if (S.messages.length > 0 && !confirm('モード変更で会話がリセットされます。よろしいですか？')) return;
+  if (S.messages.length > 0) resetChat();
+  document.querySelectorAll('.mode-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  S.mode = el.dataset.mode;
+}
+
+function selectLlm(el) {
+  if (el.classList.contains('disabled')) { showToast('このAIのキーが未設定です','error'); return; }
+  document.querySelectorAll('.llm-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  S.llm = el.dataset.llm;
+}
+
+function updateLlmUI() {
+  const ss = S.serverSettings;
+  document.querySelectorAll('.llm-chip').forEach(chip => {
+    const llm = chip.dataset.llm;
+    const has = (llm==='gemini'&&ss.hasGemini)||(llm==='claude'&&ss.hasClaude)||(llm==='openai'&&ss.hasOpenai);
+    chip.classList.toggle('disabled', !has);
+  });
+  const def = document.querySelector('.llm-chip[data-llm="'+S.llm+'"]');
+  if (def && !def.classList.contains('disabled')) {
+    document.querySelectorAll('.llm-chip').forEach(c=>c.classList.remove('active'));
+    def.classList.add('active');
+  }
+}
+
+// ============================================================
+//  チャットUI
+// ============================================================
+function addBubble(role, text) {
+  document.getElementById('welcome')?.remove();
+  const area = document.getElementById('chatArea');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  const avatar = role === 'ai' ? '🤖' : '👤';
+  const content = role === 'ai'
+    ? text.replace(/^(【.+?】)/gm, '<span class="heading">$1</span>')
+    : esc(text);
+  div.innerHTML = '<div class="msg-avatar">'+avatar+'</div><div class="msg-bubble">'+content+'</div>';
+  area.appendChild(div);
+  scrollBottom();
+}
+
+function addSysMsg(text) {
+  const area = document.getElementById('chatArea');
+  const div = document.createElement('div');
+  div.className = 'sys-msg';
+  div.textContent = text;
+  area.appendChild(div);
+  scrollBottom();
+}
+
+function showTyping() {
+  const area = document.getElementById('chatArea');
+  const div = document.createElement('div');
+  div.className = 'msg ai'; div.id = 'typingInd';
+  div.innerHTML = '<div class="msg-avatar">🤖</div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
+  area.appendChild(div);
+  scrollBottom();
+}
+function hideTyping() { document.getElementById('typingInd')?.remove(); }
+function scrollBottom() { const a = document.getElementById('chatArea'); requestAnimationFrame(()=>{a.scrollTop=a.scrollHeight}); }
+
+// ============================================================
+//  送信
+// ============================================================
+async function sendMessage() {
+  const ta = document.getElementById('userInput');
+  const text = ta.value.trim();
+  if (!text || S.isProcessing) return;
+
+  ta.value = ''; autoGrow(ta); updateSendBtn();
+  addBubble('user', text);
+  S.rawTexts.push(text);
+
+  if (S.savePanelShown) return;
+  if (S.lastAiContent && isApproval(text)) { showSavePanel(); return; }
+
+  S.messages.push({ role: 'user', content: text });
+  S.isProcessing = true;
+  showTyping();
+
+  try {
+    const data = await callAPI({
+      action: 'chat',
+      messages: S.messages,
+      mode: S.mode,
+      llm: S.llm
+    });
+    hideTyping();
+    S.isProcessing = false;
+    S.messages.push({ role: 'assistant', content: data.reply });
+    S.lastAiContent = data.reply;
+    addBubble('ai', data.reply);
+  } catch(err) {
+    hideTyping();
+    S.isProcessing = false;
+    addBubble('ai', '⚠️ エラー: ' + err.message);
+  }
+}
+
+function isApproval(t) {
+  const s = t.replace(/\s/g,'').toLowerCase();
+  return ['はい','ok','おk','オッケー','おっけー','大丈夫','だいじょうぶ','いいです','いいよ',
+    '問題ない','もんだいない','送って','保存して','よろしい','オーケー','yes','了解','りょうかい']
+    .some(w => s.includes(w));
+}
+
+// ============================================================
+//  保存パネル
+// ============================================================
+function showSavePanel() {
+  S.savePanelShown = true;
+  addSysMsg('✅ 内容が確定しました。保存先を選んでください。');
+
+  const area = document.getElementById('chatArea');
+  const panel = document.createElement('div');
+  panel.className = 'save-panel'; panel.id = 'savePanel';
+  const hasChat = S.serverSettings.hasChatWebhook;
+
+  panel.innerHTML = `
+    <div class="save-panel-title">📤 保存先を選択</div>
+    <div class="save-tabs">
+      <button class="save-tab active" onclick="switchSaveTab('doc',this)">📄 Googleドキュメント</button>
+      <button class="save-tab" onclick="switchSaveTab('chat',this)" ${!hasChat?'disabled':''}>💬 Google Chat</button>
+    </div>
+    <div class="save-section active" id="sec-doc">
+      <div class="save-tabs" style="margin-bottom:8px">
+        <button class="save-tab active" onclick="switchDocMode('append',this)">追記</button>
+        <button class="save-tab" onclick="switchDocMode('new',this)">新規作成</button>
+      </div>
+      <div id="docAppend">
+        <input type="text" class="save-input" id="savDocQ" placeholder="🔍 ドキュメント名で検索..." oninput="searchDocsDebounce()">
+        <div class="doc-list" id="savDocList"><div style="padding:12px;text-align:center;color:var(--ink3)">読み込み中...</div></div>
+      </div>
+      <div id="docNew" style="display:none">
+        <input type="text" class="save-input" id="savTitle" placeholder="タイトル（空欄で自動生成）">
+        <input type="text" class="save-input" id="savFolderQ" placeholder="🔍 フォルダ検索..." oninput="filterFolders()">
+        <div class="doc-list" id="savFolderList"><div style="padding:12px;text-align:center;color:var(--ink3)">読み込み中...</div></div>
+        <div class="save-hint">未選択ならマイドライブ直下に作成</div>
+      </div>
+      <div class="save-actions"><button class="save-btn primary" onclick="doSaveDoc()">💾 ドキュメントに保存</button></div>
+    </div>
+    <div class="save-section" id="sec-chat">
+      <p style="font-size:13px;color:var(--ink2);margin-bottom:8px">
+        整理した内容をGoogle Chatに送信します。${!hasChat?'<br><span style="color:var(--danger)">⚠️ Webhook URL未設定</span>':''}
+      </p>
+      <div class="save-actions"><button class="save-btn chat-send" onclick="doSendChat()" ${!hasChat?'disabled':''}>💬 Google Chatに送信</button></div>
+    </div>
+    <div class="save-actions" style="margin-top:6px">
+      <button class="save-btn outline" onclick="closeSavePanel()">← 会話に戻る</button>
+    </div>
+  `;
+  area.appendChild(panel);
+  scrollBottom();
+
+  // タイトル自動
+  const m = S.lastAiContent.match(/【タイトル】(.+)/);
+  if (m) document.getElementById('savTitle').value = m[1].trim();
+
+  // 読み込み
+  loadDocs(); loadFolders();
+}
+
+function closeSavePanel() {
+  S.savePanelShown = false;
+  document.getElementById('savePanel')?.remove();
+  addSysMsg('💬 会話を続けられます。追加修正があれば伝えてください。');
+}
+
+function switchSaveTab(tab, el) {
+  el.parentElement.querySelectorAll('.save-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('#savePanel > .save-section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('sec-'+tab).classList.add('active');
+}
+function switchDocMode(mode, el) {
+  el.parentElement.querySelectorAll('.save-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('docAppend').style.display = mode==='append'?'':'none';
+  document.getElementById('docNew').style.display = mode==='new'?'':'none';
+}
+
+// --- ドキュメント/フォルダ ---
+async function loadDocs() {
+  try {
+    const data = await callAPI({ action:'getRecentDocs', count:20 });
+    renderDocList(data.docs || []);
+  } catch(e) {
+    document.getElementById('savDocList').innerHTML = '<div style="padding:12px;text-align:center;color:var(--danger)">読込エラー</div>';
+  }
+}
+function renderDocList(docs) {
+  const list = document.getElementById('savDocList');
+  if (!docs.length) { list.innerHTML='<div style="padding:12px;text-align:center;color:var(--ink3)">ドキュメントなし</div>'; return; }
+  list.innerHTML = docs.map(d =>
+    '<div class="doc-item" onclick="pickDoc(\''+d.id+'\',this)">📄 <span style="flex:1">'+esc(d.name)+'</span><span class="check"></span></div>'
+  ).join('');
+}
+function pickDoc(id, el) {
+  S.selectedDocId = id;
+  el.closest('.doc-list').querySelectorAll('.doc-item').forEach(d=>{d.classList.remove('selected');d.querySelector('.check').textContent=''});
+  el.classList.add('selected'); el.querySelector('.check').textContent='✓';
+}
+function searchDocsDebounce() {
+  clearTimeout(S.searchTimer);
+  S.searchTimer = setTimeout(async ()=>{
+    const q = document.getElementById('savDocQ').value.trim();
+    try {
+      const data = q ? await callAPI({action:'searchDocs',query:q}) : await callAPI({action:'getRecentDocs',count:20});
+      renderDocList(data.docs||[]);
+    } catch(e){}
+  }, 400);
+}
+
+async function loadFolders() {
+  try {
+    const data = await callAPI({ action:'getRecentFolders', count:20 });
+    renderFolderList(data.folders || []);
+  } catch(e) {}
+}
+function renderFolderList(folders) {
+  const list = document.getElementById('savFolderList');
+  if (!folders.length) { list.innerHTML='<div style="padding:12px;text-align:center;color:var(--ink3)">フォルダなし</div>'; return; }
+  list.innerHTML = folders.map(f =>
+    '<div class="doc-item" data-name="'+esc(f.name)+'" onclick="pickFolder(\''+f.id+'\',this)">📁 <span style="flex:1">'+esc(f.name)+'</span><span class="check"></span></div>'
+  ).join('');
+}
+function pickFolder(id, el) {
+  S.selectedFolderId = id;
+  el.closest('.doc-list').querySelectorAll('.doc-item').forEach(d=>{d.classList.remove('selected');d.querySelector('.check').textContent=''});
+  el.classList.add('selected'); el.querySelector('.check').textContent='✓';
+}
+function filterFolders() {
+  const q = (document.getElementById('savFolderQ').value||'').trim().toLowerCase();
+  document.querySelectorAll('#savFolderList .doc-item').forEach(el=>{
+    el.style.display = (!q||(el.dataset.name||'').toLowerCase().includes(q)) ? '' : 'none';
+  });
+}
+
+// --- 保存実行 ---
+async function doSaveDoc() {
+  const isAppend = document.getElementById('docAppend').style.display !== 'none';
+  const raw = S.rawTexts.join('\n');
+  try {
+    if (isAppend) {
+      if (!S.selectedDocId) { showToast('ドキュメントを選択してください','error'); return; }
+      addSysMsg('💾 ドキュメントに追記中...');
+      const r = await callAPI({ action:'appendToDoc', docId:S.selectedDocId, content:S.lastAiContent, rawText:raw });
+      addBubble('ai','✅ 保存しました！\n📄 '+r.docName+'\n🔗 '+r.docUrl);
+    } else {
+      const title = document.getElementById('savTitle').value.trim();
+      addSysMsg('💾 新規ドキュメント作成中...');
+      const r = await callAPI({ action:'createNewDoc', folderId:S.selectedFolderId||'', title:title, content:S.lastAiContent, rawText:raw });
+      addBubble('ai','✅ 新規ドキュメントを作成しました！\n📄 '+r.docName+'\n🔗 '+r.docUrl);
+    }
+    S.savePanelShown = false;
+    document.getElementById('savePanel')?.remove();
+  } catch(e) { addBubble('ai','⚠️ 保存エラー: '+e.message); }
+}
+
+async function doSendChat() {
+  try {
+    addSysMsg('💬 Google Chatに送信中...');
+    await callAPI({ action:'sendToChat', text:S.lastAiContent });
+    addBubble('ai','✅ Google Chatに送信しました！');
+    S.savePanelShown = false;
+    document.getElementById('savePanel')?.remove();
+  } catch(e) { addBubble('ai','⚠️ 送信エラー: '+e.message); }
+}
+
+// ============================================================
+//  音声認識（iframe制約なし！）
+// ============================================================
+function toggleMic() { S.isRecording ? stopMic() : startMic(); }
+
+function startMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('音声認識非対応ブラウザです','error'); return; }
+
+  if (!S.recognition) {
+    const rec = new SR();
+    rec.lang = 'ja-JP'; rec.continuous = true; rec.interimResults = true;
+    rec.onresult = e => {
+      const ta = document.getElementById('userInput');
+      let fin = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) fin += e.results[i][0].transcript;
+      }
+      if (fin) { ta.value += fin; autoGrow(ta); updateSendBtn(); }
+    };
+    rec.onerror = e => {
+      if (e.error==='no-speech' && S.isRecording) { try{rec.start();}catch(x){} }
+      else if (e.error==='not-allowed') { showToast('マイク許可が必要です','error'); stopMic(); }
+    };
+    rec.onend = () => { if (S.isRecording) try{rec.start();}catch(x){} };
+    S.recognition = rec;
+  }
+
+  try {
+    S.recognition.start();
+    S.isRecording = true;
+    document.getElementById('micBtn').classList.add('recording');
+    showToast('🎤 録音中...タップで停止','info');
+  } catch(e) { showToast('音声認識開始失敗','error'); }
+}
+
+function stopMic() {
+  S.isRecording = false;
+  if (S.recognition) try{S.recognition.stop();}catch(e){}
+  document.getElementById('micBtn').classList.remove('recording');
+}
+
+// ============================================================
+//  設定
+// ============================================================
+function openSettings() {
+  const ls = getLocalSettings();
+  document.getElementById('sApiUrl').value = ls.apiUrl || '';
+  document.getElementById('sApiToken').value = ls.apiToken || '';
+  document.getElementById('settingsModal').classList.add('show');
+}
+function closeSettings() { document.getElementById('settingsModal').classList.remove('show'); }
+
+async function doSaveLocalSettings() {
+  const s = {
+    apiUrl: document.getElementById('sApiUrl').value.trim(),
+    apiToken: document.getElementById('sApiToken').value.trim()
+  };
+  setLocalSettings(s);
+  showToast('設定を保存しました','success');
+  closeSettings();
+
+  // サーバー設定取得
+  try {
+    S.serverSettings = await callAPI({ action:'getSettings' });
+    S.llm = S.serverSettings.defaultLlm || 'gemini';
+    updateLlmUI();
+    showToast('サーバー接続OK','success');
+  } catch(e) {
+    showToast('サーバー接続失敗: '+e.message,'error');
+  }
+}
+
+// ============================================================
+//  会話リセット
+// ============================================================
+function resetChat() {
+  S.messages=[]; S.rawTexts=[]; S.lastAiContent=''; S.savePanelShown=false;
+  S.selectedDocId=null; S.selectedFolderId=null;
+  document.getElementById('chatArea').innerHTML =
+    '<div class="welcome" id="welcome"><div class="icon">🎙️</div><div class="title">音声メモ AI チャット</div>' +
+    '<div class="sub">🎤マイクボタンで話すか、テキストを入力してください。<br>AIが内容を整理→確認→保存まで対話でサポートします。</div></div>';
+}
+
+// ============================================================
+//  ユーティリティ
+// ============================================================
+function autoGrow(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px'}
+function updateSendBtn(){document.getElementById('sendBtn').disabled=!document.getElementById('userInput').value.trim()}
+function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'info');t.offsetHeight;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
+function esc(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):''}
+
+// Enter送信
+document.getElementById('userInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
+</script>
+</body>
+</html>
