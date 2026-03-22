@@ -41,21 +41,6 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:15p
 }
 .hdr-btn:active{background:rgba(255,255,255,.35)}
 
-/* ============================================================
-   モードバー
-   ============================================================ */
-.mode-bar{
-  display:flex;gap:6px;padding:10px 12px;background:#fff;
-  border-bottom:1px solid #e4e4ee;flex-shrink:0;overflow-x:auto;
-  -webkit-overflow-scrolling:touch;
-}
-.mode-chip{
-  flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:13px;font-weight:600;
-  border:2px solid #e4e4ee;background:#fff;color:var(--ink2);cursor:pointer;
-  transition:all .2s;-webkit-tap-highlight-color:transparent;white-space:nowrap;
-}
-.mode-chip.active{border-color:var(--accent);background:rgba(58,109,240,.06);color:var(--accent)}
-
 /* LLM切替 */
 .llm-bar{
   display:flex;gap:4px;padding:6px 12px;background:#fafaff;
@@ -249,14 +234,6 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:15p
   </div>
 </div>
 
-<!-- ========== モード選択 ========== -->
-<div class="mode-bar">
-  <span class="mode-chip active" data-mode="lesson" onclick="selectMode(this)">📖 授業振り返り</span>
-  <span class="mode-chip" data-mode="idea" onclick="selectMode(this)">💡 アイデア</span>
-  <span class="mode-chip" data-mode="meeting" onclick="selectMode(this)">🤝 会議メモ</span>
-  <span class="mode-chip" data-mode="work" onclick="selectMode(this)">📋 業務内容</span>
-</div>
-
 <!-- ========== LLM切替 ========== -->
 <div class="llm-bar">
   <span class="label">AI:</span>
@@ -270,7 +247,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:15p
   <div class="welcome" id="welcome">
     <div class="icon">🎙️</div>
     <div class="title">音声メモ AI チャット</div>
-    <div class="sub">🎤マイクボタンで話すか、テキストを入力してください。<br>AIが内容を整理→確認→保存まで対話でサポートします。</div>
+    <div class="sub">🎤マイクボタンで話すか、テキストを入力してください。<br>AIが内容を自動判定して整理→確認→保存まで対話でサポートします。</div>
   </div>
 </div>
 
@@ -335,7 +312,7 @@ function setLocalSettings(s) { try { localStorage.setItem(LS_KEY, JSON.stringify
 //  状態
 // ============================================================
 const S = {
-  mode: 'lesson',
+  mode: 'auto',
   llm: 'gemini',
   messages: [],
   rawTexts: [],
@@ -389,16 +366,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ============================================================
-//  モード & LLM
+//  LLM選択
 // ============================================================
-function selectMode(el) {
-  if (S.messages.length > 0 && !confirm('モード変更で会話がリセットされます。よろしいですか？')) return;
-  if (S.messages.length > 0) resetChat();
-  document.querySelectorAll('.mode-chip').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  S.mode = el.dataset.mode;
-}
-
 function selectLlm(el) {
   if (el.classList.contains('disabled')) { showToast('このAIのキーが未設定です','error'); return; }
   document.querySelectorAll('.llm-chip').forEach(c => c.classList.remove('active'));
