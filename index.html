@@ -371,9 +371,16 @@ async function doAutoSave() {
     const status = result.isNew ? '新規作成' : '追記';
     addBubble('ai', '✅ 保存しました！\n📄 ' + result.docName + '（' + status + '）\n🔗 ' + result.docUrl);
 
+    // 会話状態をリセット（次の入力は新しいメモとして扱う）
+    S.messages = [];
+    S.rawTexts = [];
+    S.lastAiContent = '';
+
+    addSysMsg('── 新しいメモを入力できます ──');
+
     // Google Chatにも送信するか確認（Webhook設定済みの場合）
     if (S.serverSettings.hasChatWebhook) {
-      addSysMsg('💬 Google Chatにも送信しますか？（「送って」と入力）');
+      addSysMsg('💬 Google Chatにも送信する場合は「チャットに送って」と入力');
     }
   } catch(err) {
     S.isProcessing = false;
