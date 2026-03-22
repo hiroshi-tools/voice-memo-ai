@@ -312,10 +312,24 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:15p
 //  設定 (localStorage)
 // ============================================================
 const LS_KEY = 'voiceMemoAI_settings';
-function getLocalSettings() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch(e) { return {}; }
+function getUrlParams() {
+  const p = new URLSearchParams(window.location.search);
+  const r = {};
+  if (p.get('api')) r.apiUrl = p.get('api');
+  if (p.get('token')) r.apiToken = p.get('token');
+  return r;
 }
-function setLocalSettings(s) { localStorage.setItem(LS_KEY, JSON.stringify(s)); }
+function getLocalSettings() {
+  // 優先順位: localStorage → URLパラメータ
+  var ls = {};
+  try { ls = JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch(e) {}
+  var up = getUrlParams();
+  // URLパラメータがあればそちらを優先（シークレットモード対応）
+  if (up.apiUrl) ls.apiUrl = up.apiUrl;
+  if (up.apiToken) ls.apiToken = up.apiToken;
+  return ls;
+}
+function setLocalSettings(s) { try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch(e) {} }
 
 // ============================================================
 //  状態
@@ -683,7 +697,7 @@ function startMic() {
     S.recognition.start();
     S.isRecording = true;
     document.getElementById('micBtn').classList.add('recording');
-    showToast('🎤 録音中...タップで停止','info');
+    showRecBanner(true);
   } catch(e) { showToast('音声認識開始失敗','error'); }
 }
 
@@ -691,6 +705,23 @@ function stopMic() {
   S.isRecording = false;
   if (S.recognition) try{S.recognition.stop();}catch(e){}
   document.getElementById('micBtn').classList.remove('recording');
+  showRecBanner(false);
+  showToast('録音を停止しました','success');
+}
+
+function showRecBanner(show) {
+  let b = document.getElementById('recBanner');
+  if (show) {
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'recBanner';
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#e74c3c;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:200;animation:micPulse 1.2s infinite';
+      b.textContent = '🎤 録音中...マイクボタンで停止';
+      document.body.appendChild(b);
+    }
+  } else {
+    if (b) b.remove();
+  }
 }
 
 // ============================================================
