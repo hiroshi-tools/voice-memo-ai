@@ -467,10 +467,12 @@ async function sendMessage() {
 
   ta.value = ''; autoGrow(ta); updateSendBtn();
   addBubble('user', text);
-  S.rawTexts.push(text);
 
   if (S.savePanelShown) return;
   if (S.lastAiContent && isApproval(text)) { showSavePanel(); return; }
+
+  // 承認テキストでない場合のみrawTextsに追加
+  S.rawTexts.push(text);
 
   S.messages.push({ role: 'user', content: text });
   S.isProcessing = true;
