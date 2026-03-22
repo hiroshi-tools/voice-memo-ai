@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>音声メモ AI チャット</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -75,7 +75,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:15p
 
 .input-area{
   flex-shrink:0;background:#fff;border-top:1px solid #e4e4ee;
-  padding:10px 12px;padding-bottom:max(10px, env(safe-area-inset-bottom));
+  padding:10px 12px;padding-bottom:max(16px, calc(env(safe-area-inset-bottom) + 8px));
   display:flex;align-items:flex-end;gap:8px;
 }
 .input-wrap{
