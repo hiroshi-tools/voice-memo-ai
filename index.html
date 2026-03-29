@@ -129,8 +129,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:15p
 .btn-save{background:var(--accent);color:#fff}
 .btn-cancel{background:#f0f0f5;color:var(--ink2)}
 
-.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(80px);padding:10px 22px;border-radius:8px;font-size:13px;font-weight:600;z-index:200;transition:transform .3s ease;color:#fff;max-width:85%;text-align:center}
-.toast.show{transform:translateX(-50%) translateY(0)}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);padding:10px 22px;border-radius:8px;font-size:13px;font-weight:600;z-index:200;color:#fff;max-width:85%;text-align:center;opacity:0;pointer-events:none;transition:opacity .3s}
+.toast.show{opacity:1;pointer-events:auto}
 .toast.success{background:var(--success)}.toast.error{background:var(--danger)}.toast.info{background:var(--ink2)}
 
 .welcome{text-align:center;padding:40px 20px;color:var(--ink3)}
@@ -286,7 +286,7 @@ function addBubble(role, text) {
   let content;
   if (role === 'ai') {
     content = text
-      .replace(/^(📂\s*保存先[：:].+)/gm, '<span class="file-tag">$1</span>')
+      .replace(/^(📂\s*保存先[①②③]?[：:].+)/gm, '<span class="file-tag">$1</span>')
       .replace(/^(【.+?】)/gm, '<span class="heading">$1</span>');
   } else {
     content = esc(text);
@@ -368,17 +368,28 @@ async function doAutoSave() {
     });
 
     S.isProcessing = false;
-    const status = result.isNew ? '新規作成' : '追記';
-    addBubble('ai', '✅ 保存しました！\n📄 ' + result.docName + '（' + status + '）\n🔗 ' + result.docUrl);
 
-    // 会話状態をリセット（次の入力は新しいメモとして扱う）
+    // 複数件対応
+    if (result.results && result.results.length > 0) {
+      let msg = '✅ ' + result.count + '件保存しました！\n';
+      result.results.forEach(r => {
+        const status = r.isNew ? '新規作成' : '追記';
+        msg += '📄 ' + r.docName + '（' + status + '）\n🔗 ' + r.docUrl + '\n';
+      });
+      addBubble('ai', msg.trim());
+    } else {
+      // フォールバック（旧レスポンス形式）
+      const status = result.isNew ? '新規作成' : '追記';
+      addBubble('ai', '✅ 保存しました！\n📄 ' + result.docName + '（' + status + '）\n🔗 ' + result.docUrl);
+    }
+
+    // 会話状態をリセット
     S.messages = [];
     S.rawTexts = [];
     S.lastAiContent = '';
 
     addSysMsg('── 新しいメモを入力できます ──');
 
-    // Google Chatにも送信するか確認（Webhook設定済みの場合）
     if (S.serverSettings.hasChatWebhook) {
       addSysMsg('💬 Google Chatにも送信する場合は「チャットに送って」と入力');
     }
@@ -481,7 +492,14 @@ function resetChat() {
 // ============================================================
 function autoGrow(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px'}
 function updateSendBtn(){document.getElementById('sendBtn').disabled=!document.getElementById('userInput').value.trim()}
-function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'info');t.offsetHeight;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
+function showToast(msg,type){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast '+(type||'info');
+  clearTimeout(t._tid);
+  requestAnimationFrame(()=>{t.classList.add('show')});
+  t._tid=setTimeout(()=>{t.classList.remove('show')},2500);
+}
 function esc(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):''}
 
 document.getElementById('userInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
