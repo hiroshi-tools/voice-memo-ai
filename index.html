@@ -231,14 +231,18 @@ async function callAPI(body) {
   const ls = getLocalSettings();
   if (!ls.apiUrl) throw new Error('GAS API URLが未設定です。⚙️設定から登録してください。');
   if (ls.apiToken) body.token = ls.apiToken;
+  
   const res = await fetch(ls.apiUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    redirect: 'follow'
   });
+  
   const text = await res.text();
+  if (!text) throw new Error('サーバーから空の応答');
   let data;
-  try { data = JSON.parse(text); } catch(e) { throw new Error('サーバー応答の解析に失敗'); }
+  try { data = JSON.parse(text); } catch(e) { throw new Error('サーバー応答の解析に失敗: ' + text.substring(0, 100)); }
   if (data.error) throw new Error(data.error);
   return data;
 }
