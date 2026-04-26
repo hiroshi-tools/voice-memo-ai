@@ -94,14 +94,18 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:15p
 }
 .input-wrap textarea:focus{outline:none}
 .input-wrap textarea::placeholder{color:var(--ink3);font-size:14px}
-.mic-btn{
-  width:40px;height:40px;border-radius:50%;border:none;
-  background:transparent;font-size:22px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;-webkit-tap-highlight-color:transparent;transition:all .2s;
+.approval-row{
+  align-self:flex-start;margin-left:40px;margin-top:-4px;
+  display:flex;gap:8px;animation:fadeUp .25s ease;
 }
-.mic-btn.recording{background:var(--danger);color:#fff;animation:micPulse 1.2s infinite}
-@keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(231,76,60,.3)}50%{box-shadow:0 0 0 10px rgba(231,76,60,0)}}
+.approve-btn{
+  padding:10px 22px;border-radius:20px;border:none;
+  background:var(--success);color:#fff;font-size:14px;font-weight:700;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .15s;
+  box-shadow:0 2px 8px rgba(39,174,96,.25);display:flex;align-items:center;gap:6px;
+}
+.approve-btn:active{transform:scale(.95);background:#229954}
+.approve-btn:disabled{background:#ccc;cursor:not-allowed;box-shadow:none}
 .send-btn{
   width:40px;height:40px;border-radius:50%;border:none;
   background:var(--accent);color:#fff;font-size:18px;
@@ -160,15 +164,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:15p
   <div class="welcome" id="welcome">
     <div class="icon">🎙️</div>
     <div class="title">音声メモ AI チャット</div>
-    <div class="sub">🎤マイクボタンで話すか、テキストを入力してください。<br>AIが内容を自動判定→整理→確認→自動保存します。</div>
+    <div class="sub">💡 キーボードの🎤キーで音声入力できます（iOSの方が高精度）。<br>AIが内容を自動判定→整理→確認後、✓ボタンで保存します。</div>
   </div>
 </div>
 
 <div class="input-area">
   <div class="input-wrap">
-    <textarea id="userInput" rows="1" placeholder="話した内容を入力、またはマイクで音声入力..." oninput="autoGrow(this);updateSendBtn()"></textarea>
+    <textarea id="userInput" rows="1" placeholder="🎤キーで音声入力、または直接入力..." oninput="autoGrow(this);updateSendBtn()"></textarea>
   </div>
-  <button class="mic-btn" id="micBtn" onclick="toggleMic()">🎤</button>
   <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>➤</button>
 </div>
 
@@ -221,8 +224,6 @@ const S = {
   rawTexts: [],
   lastAiContent: '',
   isProcessing: false,
-  recognition: null,
-  isRecording: false,
   serverSettings: {}
 };
 
@@ -325,6 +326,7 @@ async function sendMessage() {
   if (!text || S.isProcessing) return;
 
   ta.value = ''; autoGrow(ta); updateSendBtn();
+  clearApprovalButton();
   addBubble('user', text);
 
   // 承認チェック → 自動保存
@@ -345,11 +347,36 @@ async function sendMessage() {
     S.messages.push({ role: 'assistant', content: data.reply });
     S.lastAiContent = data.reply;
     addBubble('ai', data.reply);
+    addApprovalButton();
   } catch(err) {
     hideTyping();
     S.isProcessing = false;
     addBubble('ai', '⚠️ エラー: ' + err.message);
   }
+}
+
+function addApprovalButton() {
+  clearApprovalButton();
+  const area = document.getElementById('chatArea');
+  const row = document.createElement('div');
+  row.className = 'approval-row';
+  row.id = 'approvalRow';
+  const btn = document.createElement('button');
+  btn.className = 'approve-btn';
+  btn.innerHTML = '✓ この内容で保存';
+  btn.onclick = doApprove;
+  row.appendChild(btn);
+  area.appendChild(row);
+  scrollBottom();
+}
+function clearApprovalButton() {
+  document.getElementById('approvalRow')?.remove();
+}
+function doApprove() {
+  if (S.isProcessing || !S.lastAiContent) return;
+  clearApprovalButton();
+  addBubble('user', '✓ OK');
+  doAutoSave();
 }
 
 function isApproval(t) {
@@ -404,63 +431,6 @@ async function doAutoSave() {
 }
 
 // ============================================================
-function toggleMic() { S.isRecording ? stopMic() : startMic(); }
-
-function startMic() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { showToast('音声認識非対応ブラウザです','error'); return; }
-
-  if (!S.recognition) {
-    const rec = new SR();
-    rec.lang = 'ja-JP'; rec.continuous = true; rec.interimResults = true;
-    rec.onresult = e => {
-      const ta = document.getElementById('userInput');
-      let fin = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) fin += e.results[i][0].transcript;
-      }
-      if (fin) { ta.value += fin; autoGrow(ta); updateSendBtn(); }
-    };
-    rec.onerror = e => {
-      if (e.error==='no-speech' && S.isRecording) { try{rec.start();}catch(x){} }
-      else if (e.error==='not-allowed') { showToast('マイク許可が必要です','error'); stopMic(); }
-    };
-    rec.onend = () => { if (S.isRecording) try{rec.start();}catch(x){} };
-    S.recognition = rec;
-  }
-
-  try {
-    S.recognition.start();
-    S.isRecording = true;
-    document.getElementById('micBtn').classList.add('recording');
-    showRecBanner(true);
-  } catch(e) { showToast('音声認識開始失敗','error'); }
-}
-
-function stopMic() {
-  S.isRecording = false;
-  if (S.recognition) try{S.recognition.stop();}catch(e){}
-  document.getElementById('micBtn').classList.remove('recording');
-  showRecBanner(false);
-  showToast('録音を停止しました','success');
-}
-
-function showRecBanner(show) {
-  let b = document.getElementById('recBanner');
-  if (show) {
-    if (!b) {
-      b = document.createElement('div');
-      b.id = 'recBanner';
-      b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#e74c3c;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:200;animation:micPulse 1.2s infinite';
-      b.textContent = '🎤 録音中...マイクボタンで停止';
-      document.body.appendChild(b);
-    }
-  } else {
-    if (b) b.remove();
-  }
-}
-
-// ============================================================
 function openSettings() {
   const ls = getLocalSettings();
   document.getElementById('sApiUrl').value = ls.apiUrl || '';
@@ -490,7 +460,7 @@ function resetChat() {
   S.messages=[]; S.rawTexts=[]; S.lastAiContent='';
   document.getElementById('chatArea').innerHTML =
     '<div class="welcome" id="welcome"><div class="icon">🎙️</div><div class="title">音声メモ AI チャット</div>' +
-    '<div class="sub">🎤マイクボタンで話すか、テキストを入力してください。<br>AIが内容を自動判定→整理→確認→自動保存します。</div></div>';
+    '<div class="sub">💡 キーボードの🎤キーで音声入力できます（iOSの方が高精度）。<br>AIが内容を自動判定→整理→確認後、✓ボタンで保存します。</div></div>';
 }
 
 // ============================================================
